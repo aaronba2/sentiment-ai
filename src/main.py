@@ -9,9 +9,11 @@ app = FastAPI(
 
 model = SentimentModel()
 
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
 
 @app.post("/predict", response_model=PredictionResponse)
 def predict(request: PredictionRequest):
