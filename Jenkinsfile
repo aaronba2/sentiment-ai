@@ -11,13 +11,13 @@ pipeline {
 
         stage('Build Docker') {
             steps {
-                bat 'docker build -t sentiment-ai:jenkins .'
+                sh 'docker build -t sentiment-ai:jenkins .'
             }
         }
 
         stage('Tests') {
             steps {
-                bat 'docker run --rm sentiment-ai:jenkins pytest tests -v'
+                sh 'docker run --rm sentiment-ai:jenkins pytest tests -v'
             }
         }
     }
