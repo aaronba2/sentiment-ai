@@ -4,7 +4,10 @@ pipeline {
     environment {
         IMAGE_NAME = 'sentiment-ai'
         REGISTRY = 'ghcr.io/aaronba2'
-        IMAGE_TAG = "${env.BUILD_NUMBER}"
+        IMAGE_TAG = sh(
+            script: 'git rev-parse --short HEAD',
+            returnStdout: true
+        ).trim()
     }
 
     stages {
@@ -12,6 +15,10 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
+
+                echo "Branche : ${env.BRANCH_NAME}"
+                echo "Commit : ${env.GIT_COMMIT}"
+
                 sh 'git log --oneline -5'
             }
         }
@@ -19,25 +26,35 @@ pipeline {
         stage('Lint') {
             steps {
                 sh '''
-                 pip install flake8
-                 flake8 src --max-line-length=100
-                  '''
+                docker run --rm \
+                --volumes-from jenkins \
+                -w $WORKSPACE \
+                python:3.11-slim \
+                sh -c "pip install flake8 -q && flake8 src/ --max-line-length=100"
+                '''
             }
         }
 
         stage('Build & Test') {
             steps {
+
                 sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
 
                 sh """
                 docker run --rm \
                 ${IMAGE_NAME}:${IMAGE_TAG} \
-                pytest tests -v \
+                pytest tests/ -v \
                 --cov=src \
                 --cov-report=xml:coverage.xml \
                 --cov-report=term-missing \
                 --cov-fail-under=70
                 """
+            }
+
+            post {
+                failure {
+                    echo 'Tests échoués ou coverage insuffisant (<70%)'
+                }
             }
         }
 
@@ -47,6 +64,7 @@ pipeline {
             }
 
             steps {
+
                 withCredentials([
                     usernamePassword(
                         credentialsId: 'github-token',
@@ -55,23 +73,33 @@ pipeline {
                     )
                 ]) {
 
-                    sh '''
-                    echo $REGISTRY_PASS | docker login ghcr.io -u $REGISTRY_USER --password-stdin
+                    sh """
+                    echo \$REGISTRY_PASS | docker login ghcr.io \
+                    -u \$REGISTRY_USER --password-stdin
 
-                    docker tag sentiment-ai:${IMAGE_TAG} ghcr.io/aaronba2/sentiment-ai:${IMAGE_TAG}
-                    docker push ghcr.io/aaronba2/sentiment-ai:${IMAGE_TAG}
+                    docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+                    docker push ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
 
-                    docker tag sentiment-ai:${IMAGE_TAG} ghcr.io/aaronba2/sentiment-ai:latest
-                    docker push ghcr.io/aaronba2/sentiment-ai:latest
-                    '''
+                    docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${REGISTRY}/${IMAGE_NAME}:latest
+                    docker push ${REGISTRY}/${IMAGE_NAME}:latest
+                    """
                 }
             }
         }
     }
 
     post {
+
         always {
-            sh 'docker compose down -v || true'
+            sh 'docker compose down -v 2>/dev/null || true'
+        }
+
+        success {
+            echo "Pipeline réussi ! Image : ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+        }
+
+        failure {
+            echo 'Pipeline échoué. Consultez les logs ci-dessus.'
         }
     }
 }
