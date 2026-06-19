@@ -4,10 +4,6 @@ pipeline {
     environment {
         IMAGE_NAME = 'sentiment-ai'
         REGISTRY = 'ghcr.io/aaronba2'
-        IMAGE_TAG = sh(
-            script: 'git rev-parse --short HEAD',
-            returnStdout: true
-        ).trim()
     }
 
     stages {
@@ -16,8 +12,15 @@ pipeline {
             steps {
                 checkout scm
 
-                echo "Branche : ${env.BRANCH_NAME}"
+                script {
+                    env.IMAGE_TAG = sh(
+                        script: 'git rev-parse --short HEAD',
+                        returnStdout: true
+                    ).trim()
+                }
+
                 echo "Commit : ${env.GIT_COMMIT}"
+                echo "Image Tag : ${env.IMAGE_TAG}"
 
                 sh 'git log --oneline -5'
             }
@@ -38,7 +41,9 @@ pipeline {
         stage('Build & Test') {
             steps {
 
-                sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
+                sh """
+                docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                """
 
                 sh """
                 docker run --rm \
@@ -53,16 +58,12 @@ pipeline {
 
             post {
                 failure {
-                    echo 'Tests échoués ou coverage insuffisant (<70%)'
+                    echo 'Tests échoués ou couverture insuffisante'
                 }
             }
         }
 
         stage('Push') {
-            when {
-                branch 'main'
-            }
-
             steps {
 
                 withCredentials([
@@ -77,11 +78,18 @@ pipeline {
                     echo \$REGISTRY_PASS | docker login ghcr.io \
                     -u \$REGISTRY_USER --password-stdin
 
-                    docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
-                    docker push ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+                    docker tag ${IMAGE_NAME}:${IMAGE_TAG} \
+                    ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
 
-                    docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${REGISTRY}/${IMAGE_NAME}:latest
-                    docker push ${REGISTRY}/${IMAGE_NAME}:latest
+                    docker push \
+                    ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+
+                    docker tag \
+                    ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} \
+                    ${REGISTRY}/${IMAGE_NAME}:latest
+
+                    docker push \
+                    ${REGISTRY}/${IMAGE_NAME}:latest
                     """
                 }
             }
@@ -95,11 +103,12 @@ pipeline {
         }
 
         success {
-            echo "Pipeline réussi ! Image : ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+            echo "Pipeline réussi !"
+            echo "Image : ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
         }
 
         failure {
-            echo 'Pipeline échoué. Consultez les logs ci-dessus.'
+            echo 'Pipeline échoué. Consultez les logs.'
         }
     }
 }
