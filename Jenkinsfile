@@ -60,7 +60,7 @@ pipeline {
                 --cov-report=term-missing \
                 --cov-fail-under=70
 
-                TEST_EXIT_CODE=$?
+                TEST_EXIT_CODE=\\$?
 
                 set -e
 
@@ -68,7 +68,7 @@ pipeline {
 
                 docker rm -f test-runner 2>/dev/null || true
 
-                exit $TEST_EXIT_CODE
+                exit \\$TEST_EXIT_CODE
                 """
             }
 
@@ -116,9 +116,7 @@ pipeline {
             steps {
 
                 timeout(time: 15, unit: 'MINUTES') {
-
                     waitForQualityGate abortPipeline: true
-
                 }
             }
         }
@@ -140,8 +138,8 @@ pipeline {
                 ]) {
 
                     sh """
-                    echo \$REGISTRY_PASS | docker login ghcr.io \
-                    -u \$REGISTRY_USER --password-stdin
+                    echo \\$REGISTRY_PASS | docker login ghcr.io \
+                    -u \\$REGISTRY_USER --password-stdin
 
                     docker tag ${IMAGE_NAME}:${IMAGE_TAG} \
                     ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
