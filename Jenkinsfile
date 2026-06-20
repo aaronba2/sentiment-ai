@@ -10,7 +10,6 @@ pipeline {
 
         stage('Checkout') {
             steps {
-
                 checkout scm
 
                 script {
@@ -29,7 +28,6 @@ pipeline {
 
         stage('Lint') {
             steps {
-
                 sh '''
                 docker run --rm \
                 --volumes-from jenkins \
@@ -45,30 +43,16 @@ pipeline {
 
                 sh """
                 docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                """
 
-                docker rm -f test-runner 2>/dev/null || true
-
-                set +e
-
-                docker run \
-                -e CI=true \
-                --name test-runner \
+                sh """
+                docker run --rm \
                 ${IMAGE_NAME}:${IMAGE_TAG} \
                 pytest tests/ -v \
                 --cov=src \
-                --cov-report=xml:/tmp/coverage.xml \
+                --cov-report=xml:coverage.xml \
                 --cov-report=term-missing \
                 --cov-fail-under=70
-
-                TEST_EXIT_CODE=\\$?
-
-                set -e
-
-                docker cp test-runner:/tmp/coverage.xml ./coverage.xml 2>/dev/null || true
-
-                docker rm -f test-runner 2>/dev/null || true
-
-                exit \\$TEST_EXIT_CODE
                 """
             }
 
@@ -104,8 +88,7 @@ pipeline {
                     -Dsonar.sources=src \
                     -Dsonar.python.version=3.11 \
                     -Dsonar.python.coverage.reportPaths=coverage.xml \
-                    -Dsonar.sourceEncoding=UTF-8 \
-                    -Dsonar.scanner.metadataFilePath=$WORKSPACE/report-task.txt
+                    -Dsonar.sourceEncoding=UTF-8
                     '''
                 }
             }
@@ -114,7 +97,6 @@ pipeline {
         stage('Quality Gate') {
 
             steps {
-
                 timeout(time: 15, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
@@ -138,21 +120,13 @@ pipeline {
                 ]) {
 
                     sh """
-                    echo \\$REGISTRY_PASS | docker login ghcr.io \
-                    -u \\$REGISTRY_USER --password-stdin
+                    echo \$REGISTRY_PASS | docker login ghcr.io -u \$REGISTRY_USER --password-stdin
 
-                    docker tag ${IMAGE_NAME}:${IMAGE_TAG} \
-                    ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+                    docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+                    docker push ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
 
-                    docker push \
-                    ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
-
-                    docker tag \
-                    ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} \
-                    ${REGISTRY}/${IMAGE_NAME}:latest
-
-                    docker push \
-                    ${REGISTRY}/${IMAGE_NAME}:latest
+                    docker tag ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} ${REGISTRY}/${IMAGE_NAME}:latest
+                    docker push ${REGISTRY}/${IMAGE_NAME}:latest
                     """
                 }
             }
@@ -161,17 +135,12 @@ pipeline {
 
     post {
 
-        always {
-            sh 'docker compose down -v 2>/dev/null || true'
-        }
-
         success {
             echo "Pipeline réussi !"
-            echo "Image : ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
         }
 
         failure {
-            echo 'Pipeline échoué. Consultez les logs.'
+            echo "Pipeline échoué."
         }
     }
 }
