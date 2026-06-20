@@ -64,7 +64,7 @@ pipeline {
 
                 set -e
 
-                docker cp test-runner:/tmp/coverage.xml ./coverage.xml
+                docker cp test-runner:/tmp/coverage.xml ./coverage.xml 2>/dev/null || true
 
                 docker rm -f test-runner 2>/dev/null || true
 
@@ -104,8 +104,17 @@ pipeline {
                     -Dsonar.sources=src \
                     -Dsonar.python.version=3.11 \
                     -Dsonar.python.coverage.reportPaths=coverage.xml \
-                    -Dsonar.sourceEncoding=UTF-8
+                    -Dsonar.sourceEncoding=UTF-8 \
+                    -Dsonar.scanner.metadataFilePath=\$WORKSPACE/report-task.txt
                     """
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 15, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
                 }
             }
         }
@@ -116,12 +125,20 @@ pipeline {
                 sh """
                 docker run --rm \
                 -v /var/run/docker.sock:/var/run/docker.sock \
+                -v trivy-cache:/root/.cache/trivy \
                 aquasec/trivy:latest image \
                 --severity HIGH,CRITICAL \
-                --exit-code 0 \
+                --exit-code 1 \
                 --format table \
                 ${IMAGE_NAME}:${IMAGE_TAG}
                 """
+            }
+
+            post {
+                failure {
+                    echo 'Vulnérabilités CRITICAL ou HIGH détectées !'
+                    echo 'Corrigez les dépendances avant de déployer.'
+                }
             }
         }
 
@@ -153,6 +170,23 @@ pipeline {
                     docker push ${REGISTRY}/${IMAGE_NAME}:latest
                     """
                 }
+            }
+        }
+
+        stage('Deploy Staging') {
+
+            when {
+                branch 'main'
+            }
+
+            steps {
+                echo "Déploiement de ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} en staging..."
+
+                sh '''
+                docker compose -f docker-compose.yml -p staging down 2>/dev/null || true
+                docker compose -f docker-compose.yml -p staging up -d
+                echo "Staging disponible sur http://localhost:8001"
+                '''
             }
         }
     }
