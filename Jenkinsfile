@@ -45,16 +45,30 @@ pipeline {
 
                 sh """
                 docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
-                """
 
-                sh """
-                docker run --rm \
+                docker rm -f test-runner 2>/dev/null || true
+
+                set +e
+
+                docker run \
+                --name test-runner \
+                -e CI=true \
                 ${IMAGE_NAME}:${IMAGE_TAG} \
                 pytest tests/ -v \
                 --cov=src \
-                --cov-report=xml:coverage.xml \
+                --cov-report=xml:/tmp/coverage.xml \
                 --cov-report=term-missing \
                 --cov-fail-under=70
+
+                TEST_EXIT_CODE=\$?
+
+                set -e
+
+                docker cp test-runner:/tmp/coverage.xml ./coverage.xml
+
+                docker rm -f test-runner 2>/dev/null || true
+
+                exit \$TEST_EXIT_CODE
                 """
             }
 
@@ -96,6 +110,20 @@ pipeline {
             }
         }
 
+        stage('Security Scan') {
+            steps {
+
+                sh """
+                docker run --rm \
+                -v /var/run/docker.sock:/var/run/docker.sock \
+                aquasec/trivy:latest image \
+                --severity HIGH,CRITICAL \
+                --exit-code 0 \
+                --format table \
+                ${IMAGE_NAME}:${IMAGE_TAG}
+                """
+            }
+        }
 
         stage('Push') {
 
