@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-WORKDIR /app
+WORKDIR /var/jenkins_home/workspace/sentiment-ai-pipeline
 
 COPY requirements.txt .
 
