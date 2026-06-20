@@ -10,6 +10,7 @@ pipeline {
 
         stage('Checkout') {
             steps {
+
                 checkout scm
 
                 script {
@@ -28,6 +29,7 @@ pipeline {
 
         stage('Lint') {
             steps {
+
                 sh '''
                 docker run --rm \
                 --volumes-from jenkins \
@@ -73,24 +75,23 @@ pipeline {
 
                 withSonarQubeEnv('sonarqube') {
 
-                    sh '''
+                    sh """
                     docker run --rm \
                     --network cicd-network \
                     --volumes-from jenkins \
-                    -w "$WORKSPACE" \
-                    -e SONAR_HOST_URL="$SONAR_HOST_URL" \
-                    -e SONAR_TOKEN="$SONARQUBE_TOKEN" \
+                    -w \$WORKSPACE \
+                    -e SONAR_HOST_URL=\$SONAR_HOST_URL \
+                    -e SONAR_TOKEN=\$SONARQUBE_TOKEN \
                     sonarsource/sonar-scanner-cli:latest \
                     sonar-scanner \
                     -Dsonar.projectKey=sentiment-ai \
                     -Dsonar.projectName=SentimentAI \
-                    -Dsonar.projectBaseDir="$WORKSPACE" \
+                    -Dsonar.projectBaseDir=\$WORKSPACE \
                     -Dsonar.sources=src \
                     -Dsonar.python.version=3.11 \
                     -Dsonar.python.coverage.reportPaths=coverage.xml \
-                    -Dsonar.sourceEncoding=UTF-8 \
-                    -Dsonar.scanner.metadataFilePath=report-task.txt
-                    '''
+                    -Dsonar.sourceEncoding=UTF-8
+                    """
                 }
             }
         }
@@ -98,6 +99,7 @@ pipeline {
         stage('Quality Gate') {
 
             steps {
+
                 timeout(time: 15, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
@@ -124,9 +126,11 @@ pipeline {
                     echo \$REGISTRY_PASS | docker login ghcr.io -u \$REGISTRY_USER --password-stdin
 
                     docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+
                     docker push ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
 
                     docker tag ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} ${REGISTRY}/${IMAGE_NAME}:latest
+
                     docker push ${REGISTRY}/${IMAGE_NAME}:latest
                     """
                 }
@@ -137,11 +141,12 @@ pipeline {
     post {
 
         success {
-            echo "Pipeline réussi !"
+            echo 'Pipeline réussi !'
+            echo "Image : ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
         }
 
         failure {
-            echo "Pipeline échoué."
+            echo 'Pipeline échoué.'
         }
     }
 }
