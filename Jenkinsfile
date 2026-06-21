@@ -19,6 +19,8 @@ pipeline {
                 }
                 echo "Commit : ${env.GIT_COMMIT}"
                 echo "Image Tag : ${env.IMAGE_TAG}"
+                echo "GIT_BRANCH: ${env.GIT_BRANCH}"
+                echo "BRANCH_NAME: ${env.BRANCH_NAME}"
                 sh 'git log --oneline -5'
             }
         }
@@ -140,7 +142,11 @@ pipeline {
         }
 
         stage('Push') {
-            when { branch 'main' }
+            when {
+                expression {
+                    return env.GIT_BRANCH == 'origin/main' || env.BRANCH_NAME == 'main'
+                }
+            }
             steps {
                 withCredentials([
                     usernamePassword(
@@ -163,7 +169,11 @@ pipeline {
         }
 
         stage('IaC Apply') {
-            when { branch 'main' }
+            when {
+                expression {
+                    return env.GIT_BRANCH == 'origin/main' || env.BRANCH_NAME == 'main'
+                }
+            }
             steps {
                 dir('infra') {
                     sh 'terraform init -input=false'
@@ -176,7 +186,11 @@ pipeline {
         }
 
         stage('Deploy Staging') {
-            when { branch 'main' }
+            when {
+                expression {
+                    return env.GIT_BRANCH == 'origin/main' || env.BRANCH_NAME == 'main'
+                }
+            }
             steps {
                 sh 'curl -f http://localhost:8001/health || exit 1'
             }
