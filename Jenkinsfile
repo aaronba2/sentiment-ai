@@ -153,11 +153,6 @@ pipeline {
         }
 
         stage('Push') {
-
-            when {
-                branch 'main'
-            }
-
             steps {
 
                 withCredentials([
@@ -185,16 +180,13 @@ pipeline {
 
         stage('IaC Apply') {
 
-            when {
-                branch 'main'
-            }
-
             steps {
                 dir('infra') {
 
                     sh 'terraform init -input=false'
 
                     sh """
+                    DOCKER_HOST=unix:///var/run/docker.sock \
                     terraform apply -auto-approve \
                     -var="image_tag=${IMAGE_TAG}"
                     """
@@ -204,17 +196,12 @@ pipeline {
 
         stage('Deploy Staging') {
 
-            when {
-                branch 'main'
-            }
-
             steps {
-                echo "Déploiement de ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} en staging..."
+
+                echo "Vérification du déploiement Terraform..."
 
                 sh '''
-                docker compose -f docker-compose.yml -p staging down 2>/dev/null || true
-                docker compose -f docker-compose.yml -p staging up -d
-                echo "Staging disponible sur http://localhost:8001"
+                curl -f http://localhost:8001/health
                 '''
             }
         }
