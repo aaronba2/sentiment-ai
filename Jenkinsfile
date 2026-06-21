@@ -40,6 +40,16 @@ pipeline {
             }
         }
 
+        stage('IaC Validate') {
+            steps {
+                dir('infra') {
+                    sh 'terraform init -backend=false -input=false'
+                    sh 'terraform fmt -check'
+                    sh 'terraform validate'
+                }
+            }
+        }
+
         stage('Build & Test') {
             steps {
 
@@ -168,6 +178,25 @@ pipeline {
                     docker tag ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} ${REGISTRY}/${IMAGE_NAME}:latest
 
                     docker push ${REGISTRY}/${IMAGE_NAME}:latest
+                    """
+                }
+            }
+        }
+
+        stage('IaC Apply') {
+
+            when {
+                branch 'main'
+            }
+
+            steps {
+                dir('infra') {
+
+                    sh 'terraform init -input=false'
+
+                    sh """
+                    terraform apply -auto-approve \
+                    -var="image_tag=${IMAGE_TAG}"
                     """
                 }
             }
