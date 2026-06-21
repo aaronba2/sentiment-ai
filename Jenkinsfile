@@ -201,7 +201,8 @@ pipeline {
                 echo "Vérification du déploiement Terraform..."
 
                 sh '''
-                curl -f http://localhost:8001/health
+                docker inspect sentiment-staging \
+                --format="{{.State.Health.Status}}" | grep healthy
                 '''
             }
         }
