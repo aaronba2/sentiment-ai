@@ -20,7 +20,6 @@ pipeline {
                 echo "Commit : ${env.GIT_COMMIT}"
                 echo "Image Tag : ${env.IMAGE_TAG}"
                 echo "GIT_BRANCH: ${env.GIT_BRANCH}"
-                echo "BRANCH_NAME: ${env.BRANCH_NAME}"
                 sh 'git log --oneline -5'
             }
         }
@@ -42,7 +41,7 @@ pipeline {
                 dir('infra') {
                     sh 'terraform init -backend=false -input=false'
                     sh 'terraform fmt -check'
-                    sh 'terraform validate'
+                    sh 'DOCKER_HOST=unix:///var/run/docker.sock terraform validate'
                 }
             }
         }
@@ -178,6 +177,7 @@ pipeline {
                 dir('infra') {
                     sh 'terraform init -input=false'
                     sh """
+                    DOCKER_HOST=unix:///var/run/docker.sock \
                     terraform apply -auto-approve \
                     -var="image_tag=${IMAGE_TAG}"
                     """

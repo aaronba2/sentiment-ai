@@ -7,9 +7,8 @@ terraform {
   }
 }
 
-provider "docker" {
-  host = "npipe:////./pipe/docker_engine"
-}
+
+
 resource "docker_network" "cicd" {
   name = "cicd-network"
 }
@@ -20,9 +19,8 @@ resource "docker_image" "sentiment" {
 }
 
 resource "docker_container" "sentiment_staging" {
-  name  = var.container_name
-  image = docker_image.sentiment.image_id
-
+  name    = var.container_name
+  image   = docker_image.sentiment.image_id
   restart = "unless-stopped"
 
   networks_advanced {
@@ -36,6 +34,13 @@ resource "docker_container" "sentiment_staging" {
 
   env = [
     "ENV=staging",
-    "LOG_LEVEL=INFO"
+    "LOG_LEVEL=INFO",
   ]
+
+  healthcheck {
+    test     = ["CMD", "curl", "-f", "http://localhost:8000/health"]
+    interval = "30s"
+    timeout  = "10s"
+    retries  = 3
+  }
 }
