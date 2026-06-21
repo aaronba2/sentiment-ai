@@ -3,33 +3,28 @@ pipeline {
 
     environment {
         IMAGE_NAME = 'sentiment-ai'
-        REGISTRY = 'ghcr.io/aaronba2'
+        REGISTRY   = 'ghcr.io/aaronba2'
     }
 
     stages {
 
         stage('Checkout') {
             steps {
-
                 checkout scm
-
                 script {
                     env.IMAGE_TAG = sh(
                         script: 'git rev-parse --short HEAD',
                         returnStdout: true
                     ).trim()
                 }
-
                 echo "Commit : ${env.GIT_COMMIT}"
                 echo "Image Tag : ${env.IMAGE_TAG}"
-
                 sh 'git log --oneline -5'
             }
         }
 
         stage('Lint') {
             steps {
-
                 sh '''
                 docker run --rm \
                 --volumes-from jenkins \
@@ -52,7 +47,6 @@ pipeline {
 
         stage('Build & Test') {
             steps {
-
                 sh """
                 docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
 
@@ -81,7 +75,6 @@ pipeline {
                 exit \$TEST_EXIT_CODE
                 """
             }
-
             post {
                 failure {
                     echo 'Tests échoués ou couverture insuffisante (<70%)'
@@ -90,15 +83,11 @@ pipeline {
         }
 
         stage('SonarQube Analysis') {
-
             environment {
                 SONARQUBE_TOKEN = credentials('sonar-token')
             }
-
             steps {
-
                 withSonarQubeEnv('sonarqube') {
-
                     sh """
                     docker run --rm \
                     --network cicd-network \
@@ -131,7 +120,6 @@ pipeline {
 
         stage('Security Scan') {
             steps {
-
                 sh """
                 docker run --rm \
                 -v /var/run/docker.sock:/var/run/docker.sock \
@@ -143,7 +131,6 @@ pipeline {
                 ${IMAGE_NAME}:${IMAGE_TAG}
                 """
             }
-
             post {
                 failure {
                     echo 'Vulnérabilités CRITICAL ou HIGH détectées !'
@@ -153,13 +140,8 @@ pipeline {
         }
 
         stage('Push') {
-
-            when {
-                branch 'main'
-            }
-
+            when { branch 'main' }
             steps {
-
                 withCredentials([
                     usernamePassword(
                         credentialsId: 'github-token',
@@ -167,16 +149,13 @@ pipeline {
                         passwordVariable: 'REGISTRY_PASS'
                     )
                 ]) {
-
                     sh """
                     echo \$REGISTRY_PASS | docker login ghcr.io -u \$REGISTRY_USER --password-stdin
 
                     docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
-
                     docker push ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
 
                     docker tag ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} ${REGISTRY}/${IMAGE_NAME}:latest
-
                     docker push ${REGISTRY}/${IMAGE_NAME}:latest
                     """
                 }
@@ -184,16 +163,10 @@ pipeline {
         }
 
         stage('IaC Apply') {
-
-            when {
-                branch 'main'
-            }
-
+            when { branch 'main' }
             steps {
                 dir('infra') {
-
                     sh 'terraform init -input=false'
-
                     sh """
                     terraform apply -auto-approve \
                     -var="image_tag=${IMAGE_TAG}"
@@ -203,30 +176,20 @@ pipeline {
         }
 
         stage('Deploy Staging') {
-
-            when {
-                branch 'main'
-            }
-
+            when { branch 'main' }
             steps {
-                echo "Déploiement de ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} en staging..."
-
-                sh '''
-                docker compose -f docker-compose.yml -p staging down 2>/dev/null || true
-                docker compose -f docker-compose.yml -p staging up -d
-                echo "Staging disponible sur http://localhost:8001"
-                '''
+                sh 'curl -f http://localhost:8001/health || exit 1'
             }
         }
     }
 
     post {
-
-        success {
-            echo 'Pipeline réussi !'
-            echo "Image : ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+        always {
+            sh 'docker compose down -v 2>/dev/null || true'
         }
-
+        success {
+            echo "Pipeline réussi ! Image : ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+        }
         failure {
             echo 'Pipeline échoué.'
         }
