@@ -198,11 +198,18 @@ pipeline {
 
             steps {
 
-                echo "Vérification du déploiement Terraform..."
+                echo "Attente du healthcheck du conteneur..."
 
                 sh '''
-                docker inspect sentiment-staging \
-                --format="{{.State.Health.Status}}" | grep healthy
+                timeout 60 sh -c '
+                until [ "$(docker inspect sentiment-staging --format="{{.State.Health.Status}}")" = "healthy" ];
+                do
+                    echo "Waiting for container healthcheck..."
+                    sleep 5
+                done
+                '
+
+                docker inspect sentiment-staging --format="{{.State.Health.Status}}"
                 '''
             }
         }
