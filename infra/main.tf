@@ -11,7 +11,7 @@ provider "docker" {
   host = "unix:///var/run/docker.sock"
 }
 
-resource "docker_network" "cicd" {
+data "docker_network" "cicd" {
   name = "cicd-network"
 }
 
@@ -25,10 +25,9 @@ resource "docker_container" "sentiment_staging" {
   image   = docker_image.sentiment.image_id
   restart = "unless-stopped"
 
-  networks_advanced {
-    name = docker_network.cicd.name
-  }
-
+networks_advanced {
+  name = data.docker_network.cicd.name
+}
   ports {
     internal = 8000
     external = var.app_port
