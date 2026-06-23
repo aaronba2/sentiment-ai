@@ -214,33 +214,29 @@ pipeline {
             }
         }
 
-        stage('Smoke Test') {
 
-            steps {
+       stage('Smoke Test') {
+           steps {
+             sh '''
+             echo "Attente démarrage..."
+             sleep 10
 
-                sh '''
-                echo "Attente démarrage..."
-                sleep 10
+             curl -f http://sentiment-staging:8000/health
+             echo "/health OK"
 
-                curl -f http://localhost:8001/health
-                echo "/health OK"
+             curl -s http://sentiment-staging:8000/metrics | \
+             grep sentiment_predictions_total
+             echo "/metrics OK"
 
-                curl -s http://localhost:8001/metrics | \
-                grep sentiment_predictions_total
-                echo "/metrics OK"
+             curl -f http://prometheus:9090/-/healthy
+             echo "Prometheus OK"
 
-                sleep 20
-
-                curl -f http://localhost:9090/-/healthy
-                echo "Prometheus OK"
-
-                curl -f http://localhost:3000/api/health
-                echo "Grafana OK"
-                '''
-            }
-        }
-    }
-
+            curl -f http://grafana:3000/api/health
+            echo "Grafana OK"
+            '''
+         } 
+       }
+      }
     post {
 
         success {
