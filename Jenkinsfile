@@ -213,7 +213,6 @@ pipeline {
                 '''
             }
         }
-    }
 
         stage('Smoke Test') {
 
@@ -240,7 +239,7 @@ pipeline {
                 '''
             }
         }
-
+    }
 
     post {
 
